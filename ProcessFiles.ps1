@@ -1,5 +1,7 @@
 #Requires -Version 5.1
 
+Clear-Host
+
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
 $windowsPrincipal = [System.Security.Principal.WindowsPrincipal]$currentUser
 
