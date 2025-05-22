@@ -1,5 +1,3 @@
-#Requires -Version 5.1
-
 Clear-Host
 
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -12,7 +10,7 @@ if (-not $windowsPrincipal.IsInRole([System.Security.Principal.WindowsBuiltInRol
 }
 
 $CombineOutputFilename = "combined_text_files.txt"
-$ListOutputFilename    = "file_list.txt"
+$ListOutputFilename = "file_list.txt"
 
 $TextExtensions = @{
     '.txt' = $true; '.log' = $true; '.md' = $true; '.markdown' = $true; '.csv' = $true; '.tsv' = $true; '.json' = $true; '.yaml' = $true; '.yml' = $true; '.toml' = $true
@@ -62,12 +60,15 @@ Function Get-ScriptDirectory {
     try {
         if ($PSScriptRoot) {
             return $PSScriptRoot
-        } elseif ($MyInvocation -ne $null -and $MyInvocation.MyCommand -ne $null) {
+        }
+        elseif ($MyInvocation -ne $null -and $MyInvocation.MyCommand -ne $null) {
             return Split-Path $MyInvocation.MyCommand.Path -Parent
-        } else {
+        }
+        else {
             return (Get-Location).Path
         }
-    } catch {
+    }
+    catch {
         Write-Warning "Could not reliably determine script directory. Using current working directory '$((Get-Location).Path)' for output."
         return (Get-Location).Path
     }
@@ -75,7 +76,7 @@ Function Get-ScriptDirectory {
 
 Function Test-IsLikelyTextFile {
     param(
-        [Parameter(Mandatory=$true, ValueFromPipeline=$true)]
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [System.IO.FileInfo]$FileObject
     )
     process {
@@ -92,7 +93,8 @@ Function Test-IsLikelyTextFile {
             }
 
             return $false
-        } catch {
+        }
+        catch {
             Write-Warning "Could not determine type for '$($FileObject.FullName)': $($_.Exception.Message)"
             return $false
         }
@@ -116,36 +118,38 @@ Function Get-ValidatedDirectory {
             $absTargetDir = (Resolve-Path -LiteralPath $rawTargetDir -ErrorAction Stop).ProviderPath
 
             if (-not (Test-Path -LiteralPath $absTargetDir -PathType Container -ErrorAction SilentlyContinue)) {
-                 Write-Error "'$absTargetDir' (from '$rawTargetDir') is not a valid directory or cannot be accessed." -ErrorAction Continue
-                 $retry = Read-Host "Try again? (y/n)"
-                 if ($retry -ne 'y') {
-                     Write-Host "Exiting this operation."
-                     return $null
-                 }
-                 continue
+                Write-Error "'$absTargetDir' (from '$rawTargetDir') is not a valid directory or cannot be accessed." -ErrorAction Continue
+                $retry = Read-Host "Try again? (y/n)"
+                if ($retry -ne 'y') {
+                    Write-Host "Exiting this operation."
+                    return $null
+                }
+                continue
             }
 
-             if (-not (Test-Path -LiteralPath $absTargetDir -IsValid)) {
-                 Write-Warning "Initial check suggests read/execute permissions might be missing for '$absTargetDir'. Scanning will proceed, but errors are possible."
-             }
-             return $absTargetDir
+            if (-not (Test-Path -LiteralPath $absTargetDir -IsValid)) { 
+                Write-Warning "Initial check suggests read/execute permissions might be missing for '$absTargetDir'. Scanning will proceed, but errors are possible."
+            }
+            return $absTargetDir
 
-        } catch [System.Management.Automation.ItemNotFoundException] {
-             Write-Error "'$($_.TargetObject)' (from '$rawTargetDir') not found." -ErrorAction Continue
-             $retry = Read-Host "Try again? (y/n)"
-             if ($retry -ne 'y') {
+        }
+        catch [System.Management.Automation.ItemNotFoundException] {
+            Write-Error "'$($_.TargetObject)' (from '$rawTargetDir') not found." -ErrorAction Continue
+            $retry = Read-Host "Try again? (y/n)"
+            if ($retry -ne 'y') {
                 Write-Host "Exiting this operation."
                 return $null
-             }
-             continue
-        } catch {
-             Write-Error "An error occurred resolving path '$rawTargetDir': $($_.Exception.Message)" -ErrorAction Continue
-             $retry = Read-Host "Try again? (y/n)"
-             if ($retry -ne 'y') {
-                 Write-Host "Exiting this operation."
-                 return $null
-             }
-             continue
+            }
+            continue
+        }
+        catch {
+            Write-Error "An error occurred resolving path '$rawTargetDir': $($_.Exception.Message)" -ErrorAction Continue
+            $retry = Read-Host "Try again? (y/n)"
+            if ($retry -ne 'y') {
+                Write-Host "Exiting this operation."
+                return $null
+            }
+            continue
         }
     }
 }
@@ -159,9 +163,11 @@ Function Get-YesNoAnswer {
         $answer = $answer.Trim().ToLower()
         if ($answer -eq 'y') {
             return $true
-        } elseif ($answer -eq 'n') {
+        }
+        elseif ($answer -eq 'n') {
             return $false
-        } else {
+        }
+        else {
             Write-Host "Invalid input. Please enter 'y' or 'n'." -ForegroundColor Yellow
         }
     }
@@ -182,7 +188,8 @@ Function Cleanup-EmptyOutputFile {
                 Remove-Item -LiteralPath $FilePath -Force -ErrorAction Stop
                 Write-Host "Removed empty output file: $FilePath"
             }
-        } catch {
+        }
+        catch {
             Write-Warning "Could not check or remove potentially empty output file '$FilePath': $($_.Exception.Message)"
         }
     }
@@ -201,10 +208,48 @@ while ($true) {
     Write-Host "2. List All Files"
     Write-SummarySeparator
 
-    $choice = ""
-    while ($choice -notin '1', '2') {
-        $choice = Read-Host "Enter your choice (1 or 2)"
-        if ($choice -notin '1', '2') {
+    $operationMode = ""
+    $userSpecifiedExtensions = $null
+
+    while ($true) {
+        $userInput = Read-Host "Enter your choice (1 or 2)"
+        $userInput = $userInput.Trim()
+
+        if ($userInput -eq '1') {
+            $operationMode = '1'
+            $userSpecifiedExtensions = $null
+            break
+        }
+        elseif ($userInput -eq '2') {
+            $operationMode = '2'
+            $userSpecifiedExtensions = $null
+            break
+        }
+        elseif ($userInput -match '^1-(.+)$') {
+            $operationMode = '1'
+            $extensionsString = $matches[1]
+            $userSpecifiedExtensions = @( $extensionsString.Split(',') | ForEach-Object {
+                    $ext = $_.Trim()
+                    if (-not ([string]::IsNullOrWhiteSpace($ext))) {
+                        $processedExt = $ext.ToLowerInvariant()
+                        if (-not $processedExt.StartsWith('.')) {
+                            "." + $processedExt
+                        }
+                        else {
+                            $processedExt
+                        }
+                    }
+                } | Where-Object { $_ -ne $null })
+
+            if ($userSpecifiedExtensions.Count -eq 0) {
+                Write-Host "No valid extensions provided after '1-'. Format is 1-ext1,ext2 (e.g., 1-py,txt)." -ForegroundColor Yellow
+            }
+            else {
+                Write-Host "Confirmation: Will only process files with extensions: $($userSpecifiedExtensions -join ', ')" -ForegroundColor Cyan
+                break
+            }
+        }
+        else {
             Write-Host "Invalid choice. Please enter 1 or 2." -ForegroundColor Yellow
         }
     }
@@ -217,7 +262,12 @@ while ($true) {
 
     $recursiveScan = Get-YesNoAnswer
 
-    $outputFilename = if ($choice -eq '1') { $CombineOutputFilename } else { $ListOutputFilename }
+    $outputFilename = if ($operationMode -eq '1') { 
+        $CombineOutputFilename 
+    }
+    else {
+        $ListOutputFilename 
+    }
     $outputFilepath = Join-Path -Path $ScriptDir -ChildPath $outputFilename
 
     Write-Host "`nStarting scan..."
@@ -231,8 +281,8 @@ while ($true) {
     $GciErrors = [System.Collections.ArrayList]::new()
 
     $gciParameters = @{
-        Path = $targetDir
-        File = $true
+        Path          = $targetDir
+        File          = $true
         ErrorVariable = '+GciErrors'
     }
     if ($recursiveScan) {
@@ -241,68 +291,88 @@ while ($true) {
 
     $fileItems = $null
     try {
-        $fileItems = Get-ChildItem @gciParameters -ErrorAction Stop
-    } catch [System.UnauthorizedAccessException] {
+        $fileItems = Get-ChildItem @gciParameters -ErrorAction SilentlyContinue 
+    }
+    catch [System.UnauthorizedAccessException] {
         Write-Error "Permission denied to access the starting directory '$targetDir'. $($_.Exception.Message)"
-        $accessErrors++
-    } catch [System.Management.Automation.ItemNotFoundException] {
+        $accessErrors++ 
+    }
+    catch [System.Management.Automation.ItemNotFoundException] {
         Write-Error "The starting directory '$targetDir' was not found. $($_.Exception.Message)"
-    } catch {
+    }
+    catch {
         Write-Error "An unexpected error occurred during directory scan setup: $($_.Exception.Message)"
         $accessErrors++
     }
-
-    $accessErrors += $GciErrors.Count
-    foreach ($err in $GciErrors) {
-         $targetObjectInfo = if ($err.TargetObject) { " ($($err.TargetObject))" } else { "" }
-         Write-Warning "Access error during directory scan: $($err.Exception.Message)$targetObjectInfo"
+    
+    $gciErrorCount = $GciErrors.Count
+    if ($gciErrorCount -gt 0) {
+        $accessErrors += $gciErrorCount
+        foreach ($err in $GciErrors) {
+            $targetObjectInfo = if ($err.TargetObject) { " ($($err.TargetObject))" } else { "" }
+            Write-Warning "Access error during directory scan: $($err.Exception.Message)$targetObjectInfo"
+        }
     }
 
     if ($fileItems -ne $null) {
+        $totalFilesScanned = @($fileItems).Count
 
-        if ($choice -eq '1') {
+        if ($operationMode -eq '1') {
             $combinedContentParts = [System.Collections.Generic.List[string]]::new()
-            $totalFilesScanned = @($fileItems).Count
-
+            
             Write-Host "Identifying and reading text files..."
-
+            
             foreach ($fileInfo in $fileItems) {
-                if (Test-IsLikelyTextFile $fileInfo) {
+                $isCandidateForProcessing = $false
+                if ($userSpecifiedExtensions) {
+                    if ($userSpecifiedExtensions -contains $fileInfo.Extension.ToLowerInvariant()) {
+                        $isCandidateForProcessing = $true
+                    }
+                }
+                else {
+                    if (Test-IsLikelyTextFile $fileInfo) {
+                        $isCandidateForProcessing = $true
+                    }
+                }
+
+                if ($isCandidateForProcessing) {
                     $headerPath = if ($recursiveScan) { $fileInfo.FullName } else { $fileInfo.Name }
                     $header = "$headerPath :`n`n"
 
                     $fileContent = $null
-                    $readWithFallback = $false
                     try {
                         $fileContent = Get-Content -LiteralPath $fileInfo.FullName -Encoding UTF8 -Raw -ErrorAction Stop
                         $processedFiles++
-                    } catch [System.Text.DecoderFallbackException] {
+                    }
+                    catch [System.Text.DecoderFallbackException] {
                         Write-Host "  Info: File '$($fileInfo.FullName)' not UTF-8. Trying default encoding." -ForegroundColor Cyan
                         try {
                             $fileContent = Get-Content -LiteralPath $fileInfo.FullName -Encoding Default -Raw -ErrorAction Stop
                             Write-Host "  Info: Successfully read '$($fileInfo.FullName)' with fallback encoding." -ForegroundColor Green
-                            $readWithFallback = $true
                             $processedFiles++
-                        } catch {
+                        }
+                        catch {
                             Write-Warning "Skipping file due to read error (after fallback): '$($fileInfo.FullName)' - Details: $($_.Exception.Message)"
                             $readErrors++
                             $fileContent = $null
                         }
-                    } catch [System.UnauthorizedAccessException] {
-                         Write-Warning "Skipping file due to permission error: '$($fileInfo.FullName)' - Details: $($_.Exception.Message)"
-                         $readErrors++
-                    } catch [System.IO.IOException] {
-                         Write-Warning "Skipping file due to I/O error (e.g., file in use): '$($fileInfo.FullName)' - Details: $($_.Exception.Message)"
-                         $readErrors++
-                    } catch {
-                         Write-Warning "Skipping file due to unexpected error during read: '$($fileInfo.FullName)' - Details: $($_.Exception.Message)"
-                         $readErrors++
+                    }
+                    catch [System.UnauthorizedAccessException] {
+                        Write-Warning "Skipping file due to permission error: '$($fileInfo.FullName)' - Details: $($_.Exception.Message)"
+                        $readErrors++
+                    }
+                    catch [System.IO.IOException] {
+                        Write-Warning "Skipping file due to I/O error (e.g., file in use): '$($fileInfo.FullName)' - Details: $($_.Exception.Message)"
+                        $readErrors++
+                    }
+                    catch {
+                        Write-Warning "Skipping file due to unexpected error during read: '$($fileInfo.FullName)' - Details: $($_.Exception.Message)"
+                        $readErrors++
                     }
 
                     if ($fileContent -ne $null) {
                         $combinedContentParts.Add(($header + $fileContent))
                     }
-                } else {
                 }
             }
 
@@ -311,6 +381,7 @@ while ($true) {
             Write-SummarySeparator
             Write-Host "Processing Complete (Combine Mode)"
             Write-SummarySeparator
+            Write-Host "Files scanned in directory/subdirectories: $totalFilesScanned"
             Write-Host "Files processed and content included: $processedFiles"
             Write-Host "Files skipped (unrecognized extension or non-file): $skippedFiles"
             if ($readErrors -gt 0) {
@@ -323,31 +394,35 @@ while ($true) {
             if ($processedFiles -eq 0) {
                 Write-Host "`nNo text files were found and processed in the specified location(s)."
                 Cleanup-EmptyOutputFile -FilePath $outputFilepath
-            } else {
+            }
+            else {
                 $finalOutputString = $combinedContentParts -join "`n`n"
                 $outputSize = [System.Text.Encoding]::UTF8.GetByteCount($finalOutputString)
                 Write-Host "`nSaving combined content ($('{0:N0}' -f $outputSize) bytes) to: $outputFilepath"
                 try {
                     Out-File -FilePath $outputFilepath -InputObject $finalOutputString -Encoding UTF8 -NoNewline -ErrorAction Stop
                     Write-Host "Combined text file saved successfully." -ForegroundColor Green
-                } catch [System.UnauthorizedAccessException] {
+                }
+                catch [System.UnauthorizedAccessException] {
                     Write-Error "`nError: Permission denied to write the output file '$outputFilepath'.`nPlease check the permissions for the script's directory.`nDetails: $($_.Exception.Message)"
-                } catch [System.IO.IOException] {
+                }
+                catch [System.IO.IOException] {
                     Write-Error "`nError writing output file '$outputFilepath': $($_.Exception.Message)"
-                } catch {
+                }
+                catch {
                     Write-Error "`nAn unexpected error occurred during output file writing: $($_.Exception.Message)"
                 }
             }
-
-        } elseif ($choice -eq '2') {
+        }
+        elseif ($operationMode -eq '2') {
             $fileList = [System.Collections.Generic.List[string]]::new()
-            $filesFound = @($fileItems).Count
+            $filesFound = $totalFilesScanned
 
             Write-Host "Generating file list..."
 
             foreach ($fileInfo in $fileItems) {
-                 $pathToList = if ($recursiveScan) { $fileInfo.FullName } else { $fileInfo.Name }
-                 $fileList.Add($pathToList)
+                $pathToList = if ($recursiveScan) { $fileInfo.FullName } else { $fileInfo.Name }
+                $fileList.Add($pathToList)
             }
 
             Write-SummarySeparator
@@ -355,36 +430,43 @@ while ($true) {
             Write-SummarySeparator
             Write-Host "Found $filesFound file(s)."
             if ($accessErrors -gt 0) {
-                 Write-Host "Encountered $accessErrors access/processing error(s) during scan (check warnings above)." -ForegroundColor Yellow
+                Write-Host "Encountered $accessErrors access/processing error(s) during scan (check warnings above)." -ForegroundColor Yellow
             }
 
             if ($filesFound -eq 0) {
                 $scanLocation = if ($recursiveScan) { "directory and its subdirectories" } else { "specified directory" }
                 Write-Host "No files were found in the $scanLocation."
                 Cleanup-EmptyOutputFile -FilePath $outputFilepath
-            } else {
+            }
+            else {
                 Write-Host "`nSaving file list to: $outputFilepath"
                 try {
                     Out-File -FilePath $outputFilepath -InputObject $fileList -Encoding UTF8 -ErrorAction Stop
                     Write-Host "File list saved successfully." -ForegroundColor Green
-                } catch [System.UnauthorizedAccessException] {
+                }
+                catch [System.UnauthorizedAccessException] {
                     Write-Error "`nError: Permission denied to write the output file '$outputFilepath'.`nPlease check write permissions for the script's directory.`nDetails: $($_.Exception.Message)"
-                } catch [System.IO.IOException] {
+                }
+                catch [System.IO.IOException] {
                     Write-Error "`nError writing output file '$outputFilepath': $($_.Exception.Message)"
-                } catch {
+                }
+                catch {
                     Write-Error "`nAn unexpected error occurred during output file writing: $($_.Exception.Message)"
                 }
             }
         }
-    } else {
-         Write-SummarySeparator
-         Write-Host "Processing Complete"
-         Write-SummarySeparator
-         Write-Host "Directory scanning failed due to initial errors. See messages above."
-         Cleanup-EmptyOutputFile -FilePath $outputFilepath
+    }
+    else {
+        Write-SummarySeparator
+        Write-Host "Processing Complete"
+        Write-SummarySeparator
+        Write-Host "Directory scanning failed due to initial errors. See messages above."
+        if ($accessErrors > 0) {
+            Write-Host "Total GCI access/setup errors encountered: $accessErrors" -ForegroundColor Yellow
+        }
+        Cleanup-EmptyOutputFile -FilePath $outputFilepath 
     }
 
     Write-SummarySeparator
     Write-Host "Returning to main menu..."
-
 }
